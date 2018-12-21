@@ -774,6 +774,8 @@ namespace Song.ServiceImpls
             Song.Entities.Outline[] outs = Business.Do<IOutline>().OutlineCount(couid, -1, true, -1);
             foreach (Song.Entities.Outline o in outs)
             {
+                //如果不是视频章节，则跳出
+                if (!o.Ol_IsVideo) continue;
                 Song.Entities.LogForStudentStudy log = this.LogForStudySingle(st.Ac_ID, o.Ol_ID);
                 if (log != null) continue;
                 //如果某一章节没有记录，则创建
@@ -895,17 +897,33 @@ namespace Song.ServiceImpls
         /// <returns>datatable中,LastTime:最后学习时间； studyTime：累计学习时间，complete：完成度百分比</returns>
         public DataTable StudentStudyCourseLog(int orgid, int acid)
         {
-            string sql = @"select * from course as c inner join 
-(select cou_id, max(lastTime) as 'lastTime',sum(studyTime) as 'studyTime',sum(case when complete>=100 then 100 else complete end)/COUNT(cou_id) as 'complete' from 
-(SELECT top 90000 ol_id,MAX(cou_id) as 'cou_id', MAX(Lss_LastTime) as 'lastTime', 
-	 sum(Lss_StudyTime) as 'studyTime', MAX(Lss_Duration) as 'totalTime', MAX([Lss_PlayTime]) as 'playTime',
-     (case
-     when max(Lss_Duration)>0 then
-     cast(convert(decimal(18,4),1000* cast(sum(Lss_StudyTime) as float)/sum(Lss_Duration)) as float)*100
-     else     0 end     ) as 'complete'
-
-     FROM [LogForStudentStudy] where {acid} 
-                        group by ol_id ) as s group by s.cou_id) as tm on c.cou_id=tm.cou_id ";
+            //清理掉不需要的数据，包括：“章节不存在，章节没有视频，章节禁用或未完成”的学习记录，全部删除
+            WhereClip wc = LogForStudentStudy._.Ac_ID == acid;
+            SourceReader lfs = Gateway.Default.FromSql(string.Format("select Ol_ID from [LogForStudentStudy] where Ac_ID={0} group by Ol_ID",acid)).ToReader();
+            while (lfs.Read())
+            {
+                long olid = lfs.GetInt64("Ol_ID");
+                Outline ol = Gateway.Default.From<Outline>().Where(Outline._.Ol_ID == olid).ToFirst<Outline>();
+                if (ol == null || ol.Ol_IsVideo == false || ol.Ol_IsUse == false || ol.Ol_IsFinish == false)
+                {
+                    Gateway.Default.Delete<LogForStudentStudy>(LogForStudentStudy._.Ol_ID == olid);
+                }
+            } ;
+            //开始计算
+            string sql = @"
+select * from course as c inner join 
+	(select cou_id, max(lastTime) as 'lastTime',sum(studyTime) as 'studyTime',		
+		sum(case when complete>=100 then 100 else complete end)/COUNT(cou_id) as 'complete'
+		from 
+			(SELECT top 90000 ol_id,MAX(cou_id) as 'cou_id', MAX(Lss_LastTime) as 'lastTime', 
+				 sum(Lss_StudyTime) as 'studyTime', MAX(Lss_Duration) as 'totalTime', MAX([Lss_PlayTime]) as 'playTime',
+				 (case  when max(Lss_Duration)>0 then
+					 cast(convert(decimal(18,4),1000* cast(sum(Lss_StudyTime) as float)/sum(Lss_Duration)) as float)*100
+					 else 0 end
+				  ) as 'complete'
+			 FROM [LogForStudentStudy]  where {acid}  group by ol_id 
+			 ) as s where s.totalTime>0 group by s.cou_id
+	) as tm on c.cou_id=tm.cou_id  ";
             sql = sql.Replace("{orgid}", orgid > 0 ? "org_id=" + orgid : "1=1");
             sql = sql.Replace("{acid}", acid > 0 ? "ac_id=" + acid : "1=1");
             try

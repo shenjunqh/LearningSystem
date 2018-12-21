@@ -82,7 +82,7 @@ namespace Song.Site.Manage.Student
             //取消
             Business.Do<ICourse>().DelteCourseBuy(st.Ac_ID, couid);
             //重载当前面
-            this.Reload();
+            this.BindData(null, null);
         }
         /// <summary>
         /// 计算累计学习时间

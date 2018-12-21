@@ -810,7 +810,7 @@ namespace Song.ServiceImpls
             WhereClip wc = ExamResults._.Exam_UID == theme.Exam_UID;
             if (stsid > 0) wc.And(ExamResults._.Sts_ID == stsid);   //取所有已分组的学员
             if (stsid < 0) wc.And(ExamResults._.Sts_ID <= 0);   //取所有未分组的学员
-            ExamResults[] results = Gateway.Default.From<ExamResults>().Where(wc).ToArray<ExamResults>();
+            ExamResults[] results = Gateway.Default.From<ExamResults>().Where(wc).OrderBy(ExamResults._.Exr_ScoreFinal.Desc).ToArray<ExamResults>();
             //计算成绩
             for (int i = 0; i < results.Length; i++)
             {
@@ -873,26 +873,58 @@ namespace Song.ServiceImpls
         /// <returns></returns>
         public DataTable Result4Theme(int examid, string stsid)
         {
-            DataTable dt = null; 
+            DataTable dtFirst = null; 
             foreach (string s in stsid.Split(','))
             {
                 if (string.IsNullOrWhiteSpace(s)) continue;
                 int sid = 0;
                 int.TryParse(s, out sid);
-                if (sid <= 0) continue;
+                //if (sid <= 0) continue;
                 //取每个组的学员的考试成绩
-                DataTable dtTm = this.Result4Theme(examid, sid);
-                if (dtTm == null) continue;
-                if (dt == null)
+                DataTable dtSecond = this.Result4Theme(examid, sid);
+                if (dtSecond == null) continue;
+                if (dtFirst == null || dtFirst.Rows.Count < 1) dtFirst = dtSecond;
+                if (!dtFirst.Equals(dtSecond))
                 {
-                    dt = dtTm;
-                }
-                else
-                {
-                    dt.Merge(dtTm, false, MissingSchemaAction.AddWithKey);
+                    //将两个表都存在的数据，合并
+                    for (int i = 0; i < dtFirst.Rows.Count; i++)
+                    {
+                        DataRow dr1 = dtFirst.Rows[i];                        
+                        foreach (DataRow dr2 in dtSecond.Rows)
+                        {
+                            if (dr1["ID"].ToString() == dr2["ID"].ToString())
+                            {
+                                for (var n = 0; n < dr1.ItemArray.Length; n++)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(dr2[n].ToString()))
+                                        dr1[n] = dr2[n];
+                                }                                
+                            }
+                        }                        
+                    }
+                    //如果第二个表比第一个表多，则添加
+                    foreach (DataRow dr2 in dtSecond.Rows)
+                    {
+                        bool isExist = false;
+                        foreach (DataRow dr1 in dtFirst.Rows)
+                        {                            
+                            if (dr1["ID"].ToString() == dr2["ID"].ToString())
+                            {
+                                isExist = true;
+                                break;
+                            }
+                        }
+                        if (!isExist)
+                        {
+                            DataRow drnew = dtFirst.NewRow();
+                            for (var n = 0; n < drnew.ItemArray.Length; n++)                            
+                                drnew[n] = dr2[n];                            
+                            dtFirst.Rows.Add(drnew);
+                        }
+                    }
                 }
             }
-            return dt;
+            return dtFirst;
         }
         /// <summary>
         /// 考试主题下的所有参考人员成绩

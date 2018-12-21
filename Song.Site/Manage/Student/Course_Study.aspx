@@ -24,12 +24,12 @@
                         <div class="itemName">
                             最近学习时间：<%# GetLastTime(Eval("Cou_ID", "{0}"))%>  
                             &nbsp;&nbsp;累计学习时间：<%# GetstudyTime(Eval("Cou_ID", "{0}"))%>
-                            &nbsp; <a href="#" class="logDetails" onclick="OpenWin('../student/StudyLog_Details.aspx?couid=<%# Eval("Cou_ID")%>',' 《<%# Eval("Cou_Name")%>》',980,80);return false;">
+                            &nbsp; <a href="#" class="logDetails" onclick="OpenWin('../student/StudyLog_Details.aspx?couid=<%# Eval("Cou_ID")%>',' 《<%# Eval("Cou_Name")%>》的学习情况',980,80);return false;">
                                 详情</a>
                         </div>
                         <div class="itemBtn">
                             <asp:LinkButton ID="lbSelected" CssClass='<%# Convert.ToBoolean(Eval("Cou_IsStudy")) ? "selected" : "noselect"%>'
-                                runat="server" CommandArgument='<%# Eval("Cou_ID") %>' OnClick="lbSelected_Click">
+                                runat="server" CommandArgument='<%# Eval("Cou_ID") %>' OnClick="lbSelected_Click" Visible="false">
                             
                             <%# Convert.ToBoolean(Eval("Cou_IsStudy")) ? "放弃学习" : "我要学习"%>
                             </asp:LinkButton>
