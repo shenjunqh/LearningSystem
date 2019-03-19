@@ -281,9 +281,17 @@ namespace Song.ServiceImpls
             //}
             if (istry != null) wc.And(Student_Course._.Stc_IsTry == (bool)istry);
             if (state == 1)
-                wc.And(Student_Course._.Stc_StartTime < DateTime.Now && Student_Course._.Stc_EndTime > DateTime.Now);
+            {
+                WhereClip wc2 = new WhereClip();
+                wc2.And(Student_Course._.Stc_StartTime < DateTime.Now && Student_Course._.Stc_EndTime > DateTime.Now);
+                wc2.Or(Student_Course._.Stc_IsFree == true);                
+                wc.And(wc2);
+            }
             if (state == 2)
+            {
+                wc.And(Student_Course._.Stc_IsFree == false);
                 wc.And(Student_Course._.Stc_EndTime < DateTime.Now);
+            }
             if (!string.IsNullOrWhiteSpace(sear)) wc.And(Course._.Cou_Name.Like("%" + sear + "%"));
             return Gateway.Default.From<Course>()
                     .InnerJoin<Student_Course>(Student_Course._.Cou_ID == Course._.Cou_ID)
@@ -298,7 +306,7 @@ namespace Song.ServiceImpls
         /// <returns></returns>
         public List<Course> CourseAll(int orgid, int sbjid, int thid, bool? isUse)
         {
-            return CourseCount(orgid, sbjid, null, isUse, -1);
+            return CourseCount(orgid, sbjid, thid, -1, null, isUse, -1);
         }
         /// <summary>
         /// 某个课程的学习人数
@@ -564,7 +572,7 @@ namespace Song.ServiceImpls
             if (order == "def") wcOrder = Course._.Cou_IsRec.Desc & Course._.Cou_ViewNum.Asc;
             if (order == "tax") wcOrder = Course._.Cou_Tax.Desc & Course._.Cou_CrtTime.Desc;
             if (order == "new") wcOrder = Course._.Cou_CrtTime.Desc;    //最新发布
-            if (order == "rec") wcOrder = Course._.Cou_IsRec.Desc & Course._.Cou_Tax.Desc & Course._.Cou_CrtTime.Desc;
+            if (order == "rec") wcOrder = Course._.Cou_IsRec.Desc & Course._.Cou_Tax.Asc & Course._.Cou_CrtTime.Desc;
             if (order == "free") wcOrder = Course._.Cou_IsFree.Desc & Course._.Cou_Tax.Desc;
             return Gateway.Default.From<Course>().Where(wc).OrderBy(wcOrder).ToList<Course>(size, (index - 1) * size);
         }
@@ -718,6 +726,7 @@ namespace Song.ServiceImpls
         /// <returns></returns>
         public DataSet CourseHot(int orgid, int sbjid, int count)
         {
+           
             string sql = @"select top {count} ISNULL(b.count,0) as 'count', c.* from course as c left join 
                             (SELECT cou_id, count(cou_id) as 'count'
                               FROM [Student_Course]  group by cou_id ) as b
@@ -725,8 +734,19 @@ namespace Song.ServiceImpls
             count = count <= 0 ? int.MaxValue : count;
             sql = sql.Replace("{count}", count.ToString());
             sql = sql.Replace("{orgid}", orgid.ToString());
-            //条件
-            sql = sql.Replace("{sbjid}", sbjid > 0 ? "sbjid=" + sbjid : "1=1");
+            //按专业选取（包括专业的下级专业）
+            string sbjWhere = string.Empty;
+            if (sbjid > 0)
+            {
+                List<int> sbjids = Business.Do<ISubject>().TreeID(sbjid);
+                
+                for (int i = 0; i < sbjids.Count; i++)
+                {
+                    sbjWhere += "sbj_id=" + sbjids[i] + " ";
+                    if (i < sbjids.Count - 1) sbjWhere += " or ";
+                }                
+            }
+            sql = sql.Replace("{sbjid}", sbjid > 0 ? "(" + sbjWhere + ")" : "1=1");
             
             return Gateway.Default.FromSql(sql).ToDataSet();
         }
@@ -739,7 +759,7 @@ namespace Song.ServiceImpls
         public bool StudyIsCourse(int stid, int couid)
         {
             Song.Entities.Student_Course sc = Gateway.Default.From<Student_Course>()
-                   .Where(Student_Course._.Ac_ID == stid && Student_Course._.Cou_ID == couid
+                   .Where(Student_Course._.Ac_ID == stid && Student_Course._.Cou_ID == couid && Student_Course._.Stc_IsTry==false
                    && Student_Course._.Stc_StartTime < DateTime.Now && Student_Course._.Stc_EndTime > DateTime.Now)
                    .ToFirst<Student_Course>();
             return sc != null;
@@ -812,7 +832,7 @@ namespace Song.ServiceImpls
             int coupon = st.Ac_Coupon;      //卡券余额
             int mprice = price.CP_Price;    //价格，所需现金
             int cprice = price.CP_Coupon;   //价格，可以用来抵扣的卡券
-            bool tm = money >= mprice || (money >= (mprice - cprice) && (coupon >= cprice));
+            bool tm = money >= mprice || money >= (mprice - (coupon > cprice ? cprice : coupon));
             if (!tm) throw new Exception("资金余额或卡券不足");
             //计算需要扣除的金额，优先扣除券
             cprice = cprice >= coupon ? coupon : cprice;    //减除的卡券数
@@ -870,6 +890,40 @@ namespace Song.ServiceImpls
             return sc;
         }
         /// <summary>
+        /// 免费学习
+        /// </summary>
+        /// <param name="stid">学习ID</param>
+        /// <param name="couid">课程ID</param>
+        /// <returns></returns>
+        public Student_Course FreeStudy(int stid, int couid)
+        {
+            return FreeStudy(stid, couid, DateTime.Now, DateTime.Now.AddYears(101));
+        }
+        /// <summary>
+        /// 免费学习
+        /// </summary>
+        /// <param name="stid">学习ID</param>
+        /// <param name="couid">课程ID</param>
+        /// <param name="start">免费时效的开始时间</param>
+        /// <param name="end">免费时效的结束时间</param>
+        /// <returns></returns>
+        public Student_Course FreeStudy(int stid, int couid, DateTime start, DateTime end)
+        {
+            Song.Entities.Student_Course sc = Business.Do<ICourse>().StudyCourse(stid, couid);
+            if (sc == null) sc = new Entities.Student_Course();
+            sc.Stc_CrtTime = DateTime.Now;
+            sc.Cou_ID = couid;
+            sc.Ac_ID = stid;
+            sc.Stc_StartTime = start;
+            sc.Stc_EndTime = end;
+            sc.Stc_IsFree = true;
+            sc.Stc_IsTry = false;
+            Song.Entities.Organization org = Business.Do<IOrganization>().OrganCurrent();
+            if (org != null) sc.Org_ID = org.Org_ID;
+            Gateway.Default.Save<Student_Course>(sc);
+            return sc;
+        }
+        /// <summary>
         /// 课程试用
         /// </summary>
         /// <param name="stid"></param>
@@ -903,6 +957,41 @@ namespace Song.ServiceImpls
             wc &= Student_Course._.Stc_IsTry == true;
             Student_Course sc = Gateway.Default.From<Student_Course>().Where(wc).ToFirst<Student_Course>();
             return sc != null;
+        }
+        /// <summary>
+        /// 直接学习该课程
+        /// </summary>
+        /// <param name="couid">课程id</param>
+        /// <param name="stid">学员id</param>
+        /// <returns>如果是免费或限时免费、或试学的课程，可以学习并返回true，不可学习返回false</returns>
+        public bool Study(int couid, int stid)
+        {
+            Song.Entities.Course course = Business.Do<ICourse>().CourseSingle(couid);
+            if (course == null) return false;
+            Song.Entities.Student_Course sc = Business.Do<ICourse>().StudyCourse(stid, couid);
+            if (sc == null)
+            {
+                //限时免费
+                if (course.Cou_IsLimitFree)
+                {
+                    sc = this.FreeStudy(stid, couid, course.Cou_FreeStart, course.Cou_FreeEnd.AddDays(1).Date);
+                }
+                //免费
+                if (course.Cou_IsFree)
+                {
+                    sc = this.FreeStudy(stid, couid);
+                }
+                else
+                {
+                    //试学
+                    if (course.Cou_IsTry) sc = this.Tryout(stid, couid);
+                }
+                return course.Cou_IsLimitFree || course.Cou_IsFree || course.Cou_IsTry;
+            }
+            else
+            {
+                return true;
+            }
         }
         /// 取消课程学习
         /// </summary>

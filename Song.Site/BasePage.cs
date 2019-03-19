@@ -162,8 +162,8 @@ namespace Song.Site
                 context.Response.Redirect(gourl);
                 return;
             }
-            //计算树形的运算时间
-            DateTime beforDT = System.DateTime.Now;
+            ////计算树形的运算时间
+            //DateTime beforDT = System.DateTime.Now;
 
             this.InitContext(context);  //初始化页面参数
             //输出数据
@@ -187,6 +187,11 @@ namespace Song.Site
                 this.Document.SetValue("adminpath", Upload.Get["Employee"].Virtual);
                 //当前模板的路径
                 this.Document.SetValue("TempPath", this.TmBank.Path.Virtual);
+                //自定义配置项
+                WeiSha.Common.CustomConfig config = CustomConfig.Load(this.Organ.Org_Config);
+                //手机端隐藏关于“充值收费”等资费相关信息
+                bool IsMobileRemoveMoney = config["IsMobileRemoveMoney"].Value.Boolean ?? false;
+                this.Document.SetValue("mremove", IsMobileRemoveMoney);
 
             }
             catch { }
@@ -208,12 +213,12 @@ namespace Song.Site
             this.InitPageTemplate(context);
             this.Document.Render(this.Response.Output);
 
-            DateTime afterDT = System.DateTime.Now;
-            TimeSpan ts = afterDT.Subtract(beforDT);
-            if (ts.TotalMilliseconds >= 100)
-            {
-                WeiSha.Common.Log.Debug(this.GetType().Name, string.Format("页面输出,耗时：{0}ms", ts.TotalMilliseconds));
-            }
+            //DateTime afterDT = System.DateTime.Now;
+            //TimeSpan ts = afterDT.Subtract(beforDT);
+            //if (ts.TotalMilliseconds >= 100)
+            //{
+            //    WeiSha.Common.Log.Debug(this.GetType().FullName, string.Format("页面输出,耗时：{0}ms", ts.TotalMilliseconds));
+            //}
         }
         #endregion
 

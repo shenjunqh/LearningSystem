@@ -219,6 +219,7 @@ namespace Song.ServiceImpls
             }
             //生成数据行
             ICellStyle style_size = hssfworkbook.CreateCellStyle();
+
             style_size.WrapText = true;
             for (int i = 0; i < dt.Rows.Count; i++)
             {
@@ -278,11 +279,14 @@ namespace Song.ServiceImpls
                 try
                 {
                     //删除附件
-                    foreach (Song.Entities.Accessory ac in acs)                   
-                        Business.Do<IAccessory>().Delete(ac.As_Id);
+                    Business.Do<IAccessory>().Delete(entity.Ol_UID,tran);
                     //先清理试题
-                    tran.Delete<Questions>(Questions._.Ol_ID == entity.Ol_ID);
-                    tran.Delete<Outline>(Outline._.Ol_ID == entity.Ol_ID);                                    
+                    tran.Delete<Questions>(Questions._.Ol_ID == entity.Ol_ID);                   
+                    //清除学习记录
+                    tran.Delete<LogForStudentStudy>(LogForStudentStudy._.Ol_ID == entity.Ol_ID);
+                    tran.Delete<LogForStudentQuestions>(LogForStudentQuestions._.Ol_ID == entity.Ol_ID);
+                    //删除章节
+                    tran.Delete<Outline>(Outline._.Ol_ID == entity.Ol_ID);
                     tran.Commit();
                     this.OnDelete(entity, null);
                 }
@@ -593,9 +597,18 @@ namespace Song.ServiceImpls
         {
             lock (lock_cache_build)
             {
-                WeiSha.Common.Cache<Song.Entities.Outline>.Data.Clear();
-                Song.Entities.Outline[] outls = Gateway.Default.From<Song.Entities.Outline>().ToArray<Outline>();
-                WeiSha.Common.Cache<Song.Entities.Outline>.Data.Fill(outls);
+                try
+                {
+                    WeiSha.Common.Cache<Song.Entities.Outline>.Data.Clear();
+                }
+                catch
+                {
+                }
+                finally
+                {
+                    Song.Entities.Outline[] outls = Gateway.Default.From<Song.Entities.Outline>().ToArray<Outline>();
+                    WeiSha.Common.Cache<Song.Entities.Outline>.Data.Fill(outls);
+                }
                 ////计算每个章节下的试题数
                 //foreach (Outline o in outls)
                 //{
@@ -688,6 +701,24 @@ namespace Song.ServiceImpls
             return Gateway.Default.Count<Outline>(wc);
         }
         /// <summary>
+        /// 当前课程下的章节数
+        /// </summary>
+        /// <param name="couid">课程id</param>
+        /// <param name="pid">父id</param>
+        /// <param name="isUse">是否启用</param>
+        /// <param name="isVideo">是否有视频</param>
+        /// <returns></returns>
+        public int OutlineOfCount(int couid, int pid, bool? isUse, bool? isVideo, bool? isFinish)
+        {
+            WhereClip wc = new WhereClip();
+            if (couid > 0) wc &= Outline._.Cou_ID == couid;
+            if (pid > -1) wc &= Outline._.Ol_PID == pid;
+            if (isUse != null) wc.And(Outline._.Ol_IsUse == (bool)isUse);
+            if (isVideo != null) wc.And(Outline._.Ol_IsVideo == (bool)isVideo);
+            if (isFinish != null) wc.And(Outline._.Ol_IsFinish == (bool)isFinish);
+            return Gateway.Default.Count<Outline>(wc);
+        }
+        /// <summary>
         /// 是否有子级章节
         /// </summary>
         /// <param name="couid">课程id</param>
@@ -773,7 +804,7 @@ namespace Song.ServiceImpls
         /// <returns></returns>
         public int QuesOfCount(int olid, int type, bool? isUse, bool isAll)
         {
-            WhereClip wc = new WhereClip();            
+            WhereClip wc = Questions._.Qus_IsError == false && Questions._.Qus_IsWrong == false;      
             if (type > 0) wc.And(Questions._.Qus_Type == type);
             if (isUse != null) wc.And(Questions._.Qus_IsUse == (bool)isUse);
             if (olid > 0 && isAll)

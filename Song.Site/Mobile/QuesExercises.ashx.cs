@@ -80,12 +80,15 @@ namespace Song.Site.Mobile
             {
                 ques = Business.Do<IQuestions>().QuesCount(-1, -1, couid, olid, -1, -1, true, 0 - 1, count);
             }
+            //清理试题文本格式
             for (int i = 0; i < ques.Length; i++)
             {
                 ques[i] = Extend.Questions.TranText(ques[i]);
                 ques[i].Qus_Title = ques[i].Qus_Title.Replace("&lt;", "<");
                 ques[i].Qus_Title = ques[i].Qus_Title.Replace("&gt;", ">");
-                ques[i].Qus_Title = Extend.Html.ClearHTML(ques[i].Qus_Title, "p", "div", "font", "span");
+                ques[i].Qus_Title = Extend.Html.ClearHTML(ques[i].Qus_Title, "p", "div", "font", "span", "a");
+                ques[i].Qus_Explain = Extend.Html.ClearHTML(ques[i].Qus_Explain, "p", "div", "font", "span", "a");
+                ques[i].Qus_Answer = Extend.Html.ClearHTML(ques[i].Qus_Answer, "p", "div", "font", "span", "a");
                 ques[i].Qus_Title = ques[i].Qus_Title.Replace("\n", "<br/>");
                 if (!string.IsNullOrWhiteSpace(ques[i].Qus_Answer))
                     ques[i].Qus_Answer = ques[i].Qus_Answer.Replace("&nbsp;", " ");
@@ -109,14 +112,15 @@ namespace Song.Site.Mobile
         /// </summary>
         /// <param name="olid">多个章节id</param>
         /// <returns></returns>
-        private List<Song.Entities.Questions> GetQues(List<int> olid,Song.Entities.Questions[] ques)
+        private List<Song.Entities.Questions> GetQues(List<int> olid, Song.Entities.Questions[] ques)
         {
+
             List<Song.Entities.Questions> list = new List<Entities.Questions>();
             foreach (int id in olid)
             {
                 foreach (Song.Entities.Questions q in ques)
                 {
-                    if (q.Ol_ID != id) continue;
+                    if (q.Ol_ID != id || q.Qus_IsUse == false || q.Qus_IsError == true || q.Qus_IsWrong == true) continue;
                     list.Add(q);
                 }
             }
@@ -203,7 +207,7 @@ namespace Song.Site.Mobile
                     if (ans[i].Ans_IsCorrect)
                         ansStr += (char)(65 + i) + "、";
                 }
-                if (ansStr.EndsWith("、")) ansStr = ansStr.Substring(0, ansStr.Length - 1);                
+                if (ansStr.Length > 0 && ansStr.EndsWith("、")) ansStr = ansStr.Substring(0, ansStr.Length - 1);               
             }
             if (qus.Qus_Type == 3)
                 ansStr = qus.Qus_IsCorrect ? "正确" : "错误";

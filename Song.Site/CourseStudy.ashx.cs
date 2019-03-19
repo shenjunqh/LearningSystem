@@ -34,14 +34,23 @@ namespace Song.Site
             //自定义配置项
             Song.Entities.Organization org = Business.Do<IOrganization>().OrganCurrent();
             WeiSha.Common.CustomConfig config = CustomConfig.Load(org.Org_Config);
-            
-            #region 章节输出
+            //
             //取当前章节
             ol = id < 1 ? Business.Do<IOutline>().OutlineFirst(couid, true)
                        : ol = Business.Do<IOutline>().OutlineSingle(id);
             //当前课程            
             Song.Entities.Course course = Business.Do<ICourse>().CourseSingle(ol == null ? couid : ol.Cou_ID);
             if (course == null) return;
+            #region 创建与学员的关联
+            if (this.Account != null)
+            {
+                int accid = this.Account.Ac_ID;
+                bool istudy = Business.Do<ICourse>().Study(course.Cou_ID, accid);
+            }
+            #endregion
+            
+            #region 章节输出
+            
             //是否免费，或是限时免费
             if (course.Cou_IsLimitFree)
             {
@@ -97,6 +106,16 @@ namespace Song.Site
                             if (ext == ".flv") videos[0].As_FileName = Path.ChangeExtension(videos[0].As_FileName, ".mp4");
                         }
                         this.Document.Variables.SetValue("video", videos[0]);
+                        if (Extend.LoginState.Accounts.IsLogin)
+                        {
+                            Song.Entities.LogForStudentStudy studyLog = Business.Do<IStudent>().LogForStudySingle(this.Account.Ac_ID, ol.Ol_ID);                           
+                            if (studyLog != null)
+                            {
+                                this.Document.Variables.SetValue("studyLog", studyLog);
+                                double historyPlay = (double)studyLog.Lss_PlayTime / 1000;
+                                this.Document.Variables.SetValue("historyPlay", historyPlay);
+                            }
+                         }
                     }
                     catch
                     {
@@ -121,17 +140,6 @@ namespace Song.Site
                     ac.As_FileName = Upload.Get["Course"].Virtual + ac.As_FileName;
                 this.Document.Variables.SetValue("access", access);
                 state = state < 1 ? 3 : state;
-            }
-            //视频的学习进度记录
-            if (this.Account != null)
-            {
-                LogForStudentStudy studyLog = Business.Do<IStudent>().LogForStudySingle(this.Account.Ac_ID, id);
-                if (studyLog != null)
-                {
-                    double historyPlay = (double)studyLog.Lss_PlayTime / 1000;
-                    this.Document.Variables.SetValue("historyPlay", historyPlay);
-                    this.Document.Variables.SetValue("studyLog", studyLog);
-                }
             }
             //当前章节是否有试题
             if (canStudy)

@@ -123,14 +123,17 @@ video::-webkit-media-controls-panel {
 #details img {
 	max-width: 100%;
 }
-#details *{
-	font-size: 16px;
-	line-height: 20px;
-	color: #333 !important;
-	background-color:transparent !important;
+#details {
+	
+}
+#details p, #details *{
+	font-size: 17px !important;
+	line-height: 30px !important;
+	background-color:transparent !important;	
+	color:#666 !important;
 }
 #details p{
-	margin-bottom:10px;	
+	margin-bottom:20px;	
 }
 #detailsArea{
 	margin: 20px;
@@ -204,6 +207,17 @@ video::-webkit-media-controls-panel {
 	height: 30px;
 	color: #CCC;
 	text-indent: 20px;
+	position:relative;
+	text-align:left;
+}
+/*学习记录递交是否成功的提示信息*/
+.StudentStudyLog{
+	position:absolute;
+	right:10px;
+	top:3px;
+}
+.error{
+	color:red;
 }
 video::-webkit-media-controls-enclosure {
     overflow:hidden;

@@ -752,6 +752,39 @@ namespace Song.ServiceImpls
             }
             return count;
         }
+        /// <summary>
+        /// 下级会员分页获取
+        /// </summary>
+        /// <param name="acid">当前账号id</param>
+        /// <param name="isUse">是否启用</param>
+        /// <param name="acc"></param>
+        /// <param name="name"></param>
+        /// <param name="phone"></param>
+        /// <param name="size"></param>
+        /// <param name="index"></param>
+        /// <param name="countSum"></param>
+        /// <returns></returns>
+        public Accounts[] SubordinatesPager(int acid, bool? isUse, string acc, string name, string phone, int size, int index, out int countSum)
+        {
+            WhereClip wc = new WhereClip();
+            if (acid > 0) wc.And(Accounts._.Ac_PID == acid);
+            if (isUse != null) wc.And(Accounts._.Ac_IsUse == isUse);
+            if (!string.IsNullOrWhiteSpace(acc) && acc.Trim() != "") wc.And(Accounts._.Ac_AccName.Like("%" + acc.Trim() + "%"));
+            if (!string.IsNullOrWhiteSpace(name) && name.Trim() != "") wc.And(Accounts._.Ac_Name.Like("%" + name.Trim() + "%"));
+            if (!string.IsNullOrWhiteSpace(phone) && phone.Trim() != "")
+            {
+                WhereClip wc2 = new WhereClip();
+                wc2.Or(Accounts._.Ac_MobiTel1.Like("%" + phone.Trim() + "%"));
+                wc2.Or(Accounts._.Ac_MobiTel2.Like("%" + phone.Trim() + "%"));
+                wc2.Or(Accounts._.Ac_AccName.Like("%" + phone.Trim() + "%"));
+                wc.And(wc2);
+            }
+            countSum = Gateway.Default.Count<Accounts>(wc);
+            Accounts[] accs = Gateway.Default.From<Accounts>().Where(wc).OrderBy(Accounts._.Ac_RegTime.Desc).ToArray<Accounts>(size, (index - 1) * size);
+            foreach (Song.Entities.Accounts ac in accs)
+                _acc_init(ac);
+            return accs;
+        }
         #endregion
 
         #region 积分管理
@@ -801,22 +834,22 @@ namespace Song.ServiceImpls
         /// </summary>
         /// <param name="acc">学员账户</param>
         /// <returns></returns>
-        public void PointAdd4Login(Accounts acc)
+        public int PointAdd4Login(Accounts acc)
         {
-            PointAdd4Login(acc, null, null, null);
+            return PointAdd4Login(acc, null, null, null);
         }
-        public void PointAdd4Login(Accounts acc, string source, string info, string remark)
+        public int PointAdd4Login(Accounts acc, string source, string info, string remark)
         {
             //每次登录增加的积分；
             int loginPoint = Business.Do<ISystemPara>()["LoginPoint"].Int32 ?? 0;
-            if (loginPoint <= 0) return;
+            if (loginPoint <= 0) return 0;
             //每天最多的登录积分；
             int maxPoint = Business.Do<ISystemPara>()["LoginPointMax"].Int32 ?? 0;
-            if (loginPoint > maxPoint) return;
+            if (loginPoint > maxPoint) return 0;
             //当前学员今天的登录积分；            
             int todaySum = PointClac(acc.Ac_ID, 1, DateTime.Now.Date, DateTime.Now.AddDays(1).Date);
             int surplus = maxPoint - todaySum;  //每天最多积分，减去已经得到的积分，获取剩余的加分空间
-            if (surplus <= 0) return;
+            if (surplus <= 0) return 0;
 
             //开始增加积分
             PointAccount pa = new PointAccount();
@@ -827,24 +860,25 @@ namespace Song.ServiceImpls
             pa.Pa_Info = info;
             pa.Pa_Remark = remark;
             this.PointAdd(pa);
+            return pa.Pa_Value;
         }
         /// <summary>
         /// 增加分享链接的访问积分
         /// </summary>
         /// <param name="acc"></param>
         /// <returns></returns>
-        public void PointAdd4Share(Accounts acc)
+        public int PointAdd4Share(Accounts acc)
         {
             //每次访问增加的积分；
             int loginPoint = Business.Do<ISystemPara>()["SharePoint"].Int32 ?? 0;
-            if (loginPoint <= 0) return;
+            if (loginPoint <= 0) return 0;
             //每天最多的登录积分；
             int maxPoint = Business.Do<ISystemPara>()["SharePointMax"].Int32 ?? 0;
-            if (loginPoint > maxPoint) return;
+            if (loginPoint > maxPoint) return 0;
             //当前学员今天的访问积分；            
             int todaySum = PointClac(acc.Ac_ID, 2, DateTime.Now.Date, DateTime.Now.AddDays(1).Date);
             int surplus = maxPoint - todaySum;  //每天最多积分，减去已经得到的积分，获取剩余的加分空间
-            if (surplus <= 0) return;
+            if (surplus <= 0) return 0;
 
             //开始增加积分
             PointAccount pa = new PointAccount();
@@ -853,24 +887,25 @@ namespace Song.ServiceImpls
             pa.Pa_From = 2;     //分享积分
             pa.Pa_Info = "分享链接";
             this.PointAdd(pa);
+            return pa.Pa_Value;
         }
         /// <summary>
         /// 增加分享链接的注册积分
         /// </summary>
         /// <param name="acc"></param>
         /// <returns></returns>
-        public void PointAdd4Register(Accounts acc)
+        public int PointAdd4Register(Accounts acc)
         {
             //每次分享注册增加的积分；
             int loginPoint = Business.Do<ISystemPara>()["RegPoint"].Int32 ?? 0;
-            if (loginPoint <= 0) return;
+            if (loginPoint <= 0) return 0;
             //每天最多的登录积分；
             int maxPoint = Business.Do<ISystemPara>()["RegPointMax"].Int32 ?? 0;
-            if (loginPoint > maxPoint) return;
+            if (loginPoint > maxPoint) return 0;
             //当前学员今天的分享注册积分；            
             int todaySum = PointClac(acc.Ac_ID, 3, DateTime.Now.Date, DateTime.Now.AddDays(1).Date);
             int surplus = maxPoint - todaySum;  //每天最多积分，减去已经得到的积分，获取剩余的加分空间
-            if (surplus <= 0) return;
+            if (surplus <= 0) return 0;
 
             //开始增加积分
             PointAccount pa = new PointAccount();
@@ -879,6 +914,7 @@ namespace Song.ServiceImpls
             pa.Pa_From = 3;     //分享注册
             pa.Pa_Info = "新增下级会员";
             this.PointAdd(pa);
+            return pa.Pa_Value;
         }
         /// <summary>
         /// 支出
@@ -1576,6 +1612,24 @@ namespace Song.ServiceImpls
             if (type > 0) wc &= MoneyAccount._.Ma_Type == type;
             if (isSuccess != null) wc &= MoneyAccount._.Ma_IsSuccess == (bool)isSuccess;
             return Gateway.Default.From<MoneyAccount>().Where(wc).OrderBy(MoneyAccount._.Ma_CrtTime.Desc).ToArray<MoneyAccount>(count);
+        }
+        /// <summary>
+        /// 计算某一个时间区间的现金
+        /// </summary>
+        /// <param name="acid">学员账户</param>
+        /// <param name="formType">1为管理员操作，2为充值码充值；3在线支付；4购买课程,5分润</param>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
+        public int MoneyClac(int acid, int formType, DateTime? start, DateTime? end)
+        {
+            WhereClip wc = new WhereClip();
+            if (acid > 0) wc &= MoneyAccount._.Ac_ID == acid;
+            if (formType > 0) wc &= MoneyAccount._.Ma_From == formType;
+            if (start != null) wc &= MoneyAccount._.Ma_CrtTime >= (DateTime)start;
+            if (end != null) wc &= MoneyAccount._.Ma_CrtTime < (DateTime)end;
+            object obj = Gateway.Default.Sum<MoneyAccount>(MoneyAccount._.Ma_Money, wc);
+            return Convert.ToInt32(obj);
         }
         /// <summary>
         /// 分页获取所有资金流水；

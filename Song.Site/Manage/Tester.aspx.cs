@@ -11,6 +11,8 @@ using System.Web.UI.HtmlControls;
 using System.Collections.Generic;
 using System.IO;
 using WeiSha.Common;
+using NPOI.HSSF.UserModel;
+using NPOI.SS.Converter;
 
 
 namespace Song.Site.Manage
@@ -20,17 +22,9 @@ namespace Song.Site.Manage
 
         protected void Page_Load(object sender, EventArgs e)
         {
-            string path = this.Request.Url.PathAndQuery;
 
-            WeiSha.Common.PageCache cache = WeiSha.Common.PageCache.Get[path];
-
-
-            //txt = _replacePath(txt, "body|link|script|img");
-            string a = "false";
-            bool b=true;
-            bool.TryParse(a,out b);
-           
-
+            string x = Request.ServerVariables["REQUEST_METHOD"];
+            string b = x;
 
         }
 
